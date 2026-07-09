@@ -1,0 +1,10 @@
+<svg width="120" height="120" viewBox="-20 -4 150 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ActionArc logo">
+  <title>ActionArc logo</title>
+  <g transform="translate(-49 -9)">
+    <g id="arches" transform="translate(30)">
+      <path d="M18.519 125.926Q18.519 22.222 44.444 22.222q22.222 0 22.222 81.481" stroke="#2196F3" stroke-width="8.88888888888889" fill="none" stroke-linecap="round"/>
+      <path d="M81.481 103.704q0 -81.481 22.222 -81.481 25.926 0 25.926 103.704" stroke="#2196F3" stroke-width="8.88888888888889" fill="none" stroke-linecap="round"/>
+      <path d="M18.519 125.926q55.556 -114.815 111.111 0" stroke="#2196F3" stroke-width="8.88888888888889" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
