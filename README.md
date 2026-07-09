@@ -1,2 +1,2 @@
 # ActionArc
-Build reusable automations from triggers and actions.
+> Build reusable automations from triggers and actions.
