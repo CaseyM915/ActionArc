@@ -1,0 +1,22 @@
+{
+  "id": "example-arc",
+  "name": "Example Arc",
+  "description": "Proves the basic ActionArc execution path.",
+  "enabled": true,
+  "schedule": {
+    "type": "manual"
+  },
+  "trigger": {
+    "type": "always",
+    "config": {}
+  },
+  "actions": [
+    {
+      "type": "write_file",
+      "config": {
+        "path": "data/example-output.txt",
+        "content": "ActionArc completed its first Arc."
+      }
+    }
+  ]
+}
