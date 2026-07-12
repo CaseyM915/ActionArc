@@ -4,7 +4,8 @@
   "description": "Proves the basic ActionArc execution path.",
   "enabled": true,
   "schedule": {
-    "type": "manual"
+    "type": "interval",
+    "seconds": 5
   },
   "trigger": {
     "type": "always",
