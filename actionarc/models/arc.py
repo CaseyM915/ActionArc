@@ -6,6 +6,8 @@ from typing import Any
 from actionarc.models.action import ActionDefinition
 from actionarc.models.trigger import TriggerDefinition
 
+SUPPORTED_FORMAT_VERSION = 1
+
 
 @dataclass(slots=True)
 class ScheduleDefinition:
@@ -45,8 +47,16 @@ class Arc:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Arc":
         """Create an Arc from persisted Arc data."""
+        format_version = data["format_version"]
+
+        if format_version != SUPPORTED_FORMAT_VERSION:
+            raise ValueError(
+                f"Unsupported Arc format version: {format_version}. "
+                f"Expected version {SUPPORTED_FORMAT_VERSION}."
+            )
+
         return cls(
-            format_version=data["format_version"],
+            format_version=format_version,
             id=data["id"],
             name=data["name"],
             description=data.get("description", ""),
