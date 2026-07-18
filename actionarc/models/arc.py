@@ -33,6 +33,7 @@ class ScheduleDefinition:
 class Arc:
     """The primary automation object managed by ActionArc."""
 
+    format_version: int
     id: str
     name: str
     trigger: TriggerDefinition
@@ -45,6 +46,7 @@ class Arc:
     def from_dict(cls, data: dict[str, Any]) -> "Arc":
         """Create an Arc from persisted Arc data."""
         return cls(
+            format_version=data["format_version"],
             id=data["id"],
             name=data["name"],
             description=data.get("description", ""),
