@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from actionarc.engine.controller import EngineController
 from actionarc.engine.results import ArcRunResult, ArcRunStatus
+from actionarc import APP_VERSION
 from actionarc.models import Arc
 
 
@@ -148,7 +149,7 @@ class MainWindow(QMainWindow):
         title = QLabel("ActionArc")
         title.setObjectName("applicationTitle")
 
-        subtitle = QLabel("Your automations at a glance.")
+        subtitle = QLabel(f"Your automations at a glance.  •  v{APP_VERSION}")
         subtitle.setObjectName("mutedText")
 
         title_area.addWidget(title)
