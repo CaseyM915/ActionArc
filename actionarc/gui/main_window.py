@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Thread
 from uuid import uuid4
+import re
 
 from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QCloseEvent
@@ -285,6 +286,10 @@ class MainWindow(QMainWindow):
         self.arc_enabled_toggle = ToggleSwitch("Enabled")
         self.arc_enabled_toggle.setEnabled(False)
 
+        self.duplicate_arc_button = QPushButton("Duplicate")
+        self.duplicate_arc_button.setObjectName("secondaryButton")
+        self.duplicate_arc_button.setEnabled(False)
+
         title_controls = QVBoxLayout()
         title_controls.setSpacing(8)
         title_controls.addWidget(self.arc_enabled_toggle)
@@ -292,8 +297,14 @@ class MainWindow(QMainWindow):
         title_row.addLayout(title_area, 1)
         title_row.addLayout(title_controls)
 
+        overview_row = QHBoxLayout()
+
         overview_heading = QLabel("Overview")
         overview_heading.setObjectName("subsectionTitle")
+
+        overview_row.addWidget(overview_heading)
+        overview_row.addStretch()
+        overview_row.addWidget(self.duplicate_arc_button)
 
         summary_card = QFrame()
         summary_card.setObjectName("summaryCard")
@@ -316,7 +327,7 @@ class MainWindow(QMainWindow):
         summary_layout.addWidget(self.arc_status)
 
         layout.addLayout(title_row)
-        layout.addWidget(overview_heading)
+        layout.addLayout(overview_row)
         layout.addWidget(summary_card)
         layout.addStretch()
 
@@ -386,6 +397,7 @@ class MainWindow(QMainWindow):
         self.signals.result_received.connect(self._handle_result)
         self.signals.manual_run_finished.connect(self._finish_manual_run)
         self.signals.operation_failed.connect(self._handle_operation_error)
+        self.duplicate_arc_button.clicked.connect(self._duplicate_selected_arc)
 
     def _load_arcs(self) -> None:
         """Populate the Arc list from the loaded Arcs."""
@@ -424,6 +436,7 @@ class MainWindow(QMainWindow):
             self.arc_enabled_toggle.setChecked(False)
             self.arc_enabled_toggle.setEnabled(False)
             self.arc_enabled_toggle.blockSignals(False)
+            self.duplicate_arc_button.setEnabled(False)
             self._update_run_button()
             return
 
@@ -446,6 +459,7 @@ class MainWindow(QMainWindow):
         self.arc_enabled_toggle.setText("Enabled" if arc.enabled else "Disabled")
         self.arc_enabled_toggle.setEnabled(True)
         self.arc_enabled_toggle.blockSignals(False)
+        self.duplicate_arc_button.setEnabled(True)
 
         self.arc_trigger.setText(
             f"<b>Trigger</b><br>"
@@ -552,6 +566,37 @@ class MainWindow(QMainWindow):
                 break
 
         self._add_activity(f'Created Arc "{arc.name}".')
+
+    def _duplicate_selected_arc(self) -> None:
+        """Duplicate the selected Arc as a disabled independent copy."""
+        source_arc = self._selected_arc()
+
+        if source_arc is None:
+            return
+
+        arc_data = source_arc.to_dict()
+        arc_data["id"] = str(uuid4())
+        arc_data["name"] = self._next_copy_name(source_arc.name)
+        arc_data["enabled"] = False
+
+        arc = Arc.from_dict(arc_data)
+
+        try:
+            self.arc_store.save(arc, ARCS_PATH / f"{arc.id}.json")
+        except Exception as error:
+            self._add_activity(f"Could not duplicate {source_arc.name}: {error}", "failure")
+            return
+
+        self.arcs.append(arc)
+        self._load_arcs()
+
+        for row in range(self.arc_list.count()):
+            item = self.arc_list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == arc.id:
+                self.arc_list.setCurrentItem(item)
+                break
+
+        self._add_activity(f'Duplicated Arc as "{arc.name}".', "success")
 
     def _run_selected_arc(self) -> None:
         """Run the selected Arc without blocking the GUI thread."""
@@ -690,6 +735,20 @@ class MainWindow(QMainWindow):
             (arc for arc in self.arcs if arc.id == arc_id),
             None,
         )
+
+    def _next_copy_name(self, name: str) -> str:
+        """Return the next available copy name for an Arc."""
+        base_name = re.sub(r" \(Copy(?: \d+)?\)$", "", name)
+        existing_names = {arc.name for arc in self.arcs}
+
+        if f"{base_name} (Copy)" not in existing_names:
+            return f"{base_name} (Copy)"
+
+        copy_number = 2
+        while f"{base_name} (Copy {copy_number})" in existing_names:
+            copy_number += 1
+
+        return f"{base_name} (Copy {copy_number})"
 
     def _format_schedule(self, arc: Arc) -> str:
         """Create a readable schedule description."""
