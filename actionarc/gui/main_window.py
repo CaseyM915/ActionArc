@@ -53,7 +53,7 @@ class ArcListCard(QFrame):
         self.setProperty("selected", False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 12, 15, 12)
+        layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(7)
 
         title_row = QHBoxLayout()
@@ -69,6 +69,9 @@ class ArcListCard(QFrame):
 
         action_names = ", ".join(action.type for action in arc.actions) or "No actions"
 
+        details_row = QHBoxLayout()
+        details_row.setSpacing(10)
+
         flow = QLabel(f"{arc.trigger.type}  →  {action_names}")
         flow.setObjectName("arcCardFlow")
 
@@ -78,9 +81,12 @@ class ArcListCard(QFrame):
         title_row.addWidget(name, 1)
         title_row.addWidget(status)
 
+        details_row.addWidget(flow)
+        details_row.addStretch()
+        details_row.addWidget(schedule)
+
         layout.addLayout(title_row)
-        layout.addWidget(flow)
-        layout.addWidget(schedule)
+        layout.addLayout(details_row)
 
     def set_selected(self, selected: bool) -> None:
         """Update the card's selected appearance."""
@@ -203,6 +209,7 @@ class MainWindow(QMainWindow):
 
         self.arc_count = QLabel()
         self.arc_count.setObjectName("countBadge")
+        self.arc_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         heading_row.addLayout(heading_area)
         heading_row.addStretch()
@@ -375,7 +382,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, arc.id)
             item.setToolTip(arc.description)
-            item.setSizeHint(QSize(0, 102))
+            item.setSizeHint(QSize(0, 78))
 
             card = ArcListCard(
                 arc=arc,
