@@ -566,8 +566,8 @@ class MainWindow(QMainWindow):
                 ActionDefinition(
                     type="write_file",
                     config={
-                        "path": "data/new-arc-output.txt",
-                        "content": "Hello from ActionArc!",
+                        "path": "new-arc-output.txt",
+                        "content": "Hello from SUDOMG ActionArc!",
                     },
                 )
             ],
