@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QCloseEvent
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -43,6 +44,14 @@ class EngineSignalBridge(QObject):
         """Publish an engine result through a Qt signal."""
         self.result_received.emit(arc, result)
 
+class ToggleSwitch(QCheckBox):
+    """Display a checkbox as a toggle switch."""
+
+    def __init__(self, text: str = ""):
+        super().__init__(text)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setObjectName("toggleSwitch")
+        self.setFixedWidth(110)
 
 class ArcListCard(QFrame):
     """Display one Arc inside the loaded Arc list."""
@@ -267,18 +276,12 @@ class MainWindow(QMainWindow):
         title_area.addWidget(self.arc_name)
         title_area.addWidget(self.arc_description)
 
-        self.arc_enabled_badge = QLabel()
-        self.arc_enabled_badge.setObjectName("arcEnabledBadge")
-        self.arc_enabled_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.toggle_arc_button = QPushButton()
-        self.toggle_arc_button.setObjectName("toggleArcButton")
-        self.toggle_arc_button.setEnabled(False)
+        self.arc_enabled_toggle = ToggleSwitch("Enabled")
+        self.arc_enabled_toggle.setEnabled(False)
 
         title_controls = QVBoxLayout()
         title_controls.setSpacing(8)
-        title_controls.addWidget(self.arc_enabled_badge)
-        title_controls.addWidget(self.toggle_arc_button)
+        title_controls.addWidget(self.arc_enabled_toggle)
 
         title_row.addLayout(title_area, 1)
         title_row.addLayout(title_controls)
@@ -370,7 +373,7 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self._start_engine)
         self.stop_button.clicked.connect(self._stop_engine)
         self.run_button.clicked.connect(self._run_selected_arc)
-        self.toggle_arc_button.clicked.connect(self._toggle_selected_arc)
+        self.arc_enabled_toggle.toggled.connect(self._set_selected_arc_enabled)
         self.arc_list.currentItemChanged.connect(self._show_selected_arc)
 
         self.signals.result_received.connect(self._handle_result)
@@ -410,6 +413,11 @@ class MainWindow(QMainWindow):
         self._set_card_selected(current, True)
 
         if current is None:
+            self.arc_enabled_toggle.blockSignals(True)
+            self.arc_enabled_toggle.setChecked(False)
+            self.arc_enabled_toggle.setEnabled(False)
+            self.arc_enabled_toggle.blockSignals(False)
+            self._update_run_button()
             return
 
         arc = self._find_arc(current.data(Qt.ItemDataRole.UserRole))
@@ -426,13 +434,11 @@ class MainWindow(QMainWindow):
             arc.description or "No description provided."
         )
 
-        self.arc_enabled_badge.setText(
-            "Enabled" if arc.enabled else "Disabled"
-        )
-        self.arc_enabled_badge.setProperty(
-            "enabled",
-            arc.enabled,
-        )
+        self.arc_enabled_toggle.blockSignals(True)
+        self.arc_enabled_toggle.setChecked(arc.enabled)
+        self.arc_enabled_toggle.setText("Enabled" if arc.enabled else "Disabled")
+        self.arc_enabled_toggle.setEnabled(True)
+        self.arc_enabled_toggle.blockSignals(False)
 
         self.arc_trigger.setText(
             f"<b>Trigger</b><br>"
@@ -456,15 +462,6 @@ class MainWindow(QMainWindow):
             f"{'Enabled' if arc.enabled else 'Disabled'}</span>"
         )
 
-        self.arc_enabled_badge.style().unpolish(self.arc_enabled_badge)
-        self.arc_enabled_badge.style().polish(self.arc_enabled_badge)
-
-        self.toggle_arc_button.setText("Disable Arc" if arc.enabled else "Enable Arc")
-        self.toggle_arc_button.setProperty("enabled", arc.enabled)
-        self.toggle_arc_button.setEnabled(True)
-        self.toggle_arc_button.style().unpolish(self.toggle_arc_button)
-        self.toggle_arc_button.style().polish(self.toggle_arc_button)
-
         self._update_run_button()
 
     def _start_engine(self) -> None:
@@ -485,25 +482,35 @@ class MainWindow(QMainWindow):
         self._update_engine_status()
         self._add_activity("Engine stopped.")
 
-    def _toggle_selected_arc(self) -> None:
-        """Enable or disable the selected Arc and persist the change."""
+    def _set_selected_arc_enabled(self, enabled: bool) -> None:
+        """Update the selected Arc's enabled state and persist the change."""
         arc = self._selected_arc()
 
         if arc is None:
-            self._add_activity("No Arc is selected.", "warning")
+            self.arc_enabled_toggle.blockSignals(True)
+            self.arc_enabled_toggle.setChecked(False)
+            self.arc_enabled_toggle.blockSignals(False)
             return
 
-        arc.enabled = not arc.enabled
+        if arc.enabled == enabled:
+            return
+
+        arc.enabled = enabled
+        self.arc_enabled_toggle.setText("Enabled" if enabled else "Disabled")
 
         try:
             self.arc_store.save(arc)
         except Exception as error:
-            arc.enabled = not arc.enabled
+            arc.enabled = not enabled
+            self.arc_enabled_toggle.blockSignals(True)
+            self.arc_enabled_toggle.setChecked(arc.enabled)
+            self.arc_enabled_toggle.setText("Enabled" if arc.enabled else "Disabled")
+            self.arc_enabled_toggle.blockSignals(False)
             self._add_activity(f"Could not update {arc.name}: {error}", "failure")
             return
 
         self._refresh_selected_arc()
-        state = "enabled" if arc.enabled else "disabled"
+        state = "enabled" if enabled else "disabled"
         self._add_activity(f"{arc.name} was {state}.", "success")
 
     def _run_selected_arc(self) -> None:
@@ -788,26 +795,32 @@ class MainWindow(QMainWindow):
                 border-color: #61252c;
             }
 
-            QLabel#arcEnabledBadge {
-                min-width: 74px;
-                color: #8b949e;
-                background-color: #202833;
-                border: 1px solid #303b49;
-                border-radius: 11px;
-                padding: 5px 9px;
+            QCheckBox#toggleSwitch {
+                spacing: 10px;
+                color: #f0f6fc;
                 font-weight: 650;
             }
-
-            QLabel#arcEnabledBadge[enabled="true"] {
-                color: #3fb950;
-                background-color: #10291c;
-                border-color: #1d5133;
-            }
-
-            QLabel#arcEnabledBadge[enabled="false"] {
-                color: #8b949e;
+            
+            QCheckBox#toggleSwitch::indicator {
+                width: 38px;
+                height: 20px;
+                border: 1px solid #45566a;
+                border-radius: 10px;
                 background-color: #202833;
-                border-color: #303b49;
+            }
+            
+            QCheckBox#toggleSwitch::indicator:hover {
+                border-color: #6e8196;
+            }
+            
+            QCheckBox#toggleSwitch::indicator:checked {
+                background-color: #238636;
+                border-color: #3fb950;
+            }
+            
+            QCheckBox#toggleSwitch::indicator:disabled {
+                background-color: #101821;
+                border-color: #1d2a38;
             }
 
             QFrame#panel {
@@ -965,32 +978,6 @@ class MainWindow(QMainWindow):
                 color: #52606f;
                 background-color: #101821;
                 border-color: #1d2a38;
-            }
-            
-            QPushButton#toggleArcButton {
-                min-width: 92px;
-                padding: 7px 12px;
-            }
-            
-            QPushButton#toggleArcButton[enabled="true"] {
-                color: #f0b72f;
-                background-color: #2d2411;
-                border-color: #66501c;
-            }
-            
-            QPushButton#toggleArcButton[enabled="true"]:hover {
-                background-color: #3a2e14;
-                border-color: #8a6a22;
-            }
-            
-            QPushButton#toggleArcButton[enabled="false"] {
-                color: #56d364;
-                background-color: #10291c;
-                border-color: #1d5133;
-            }
-            
-            QPushButton#toggleArcButton[enabled="false"]:hover {
-                background-color: #163823;
             }
 
             QSplitter::handle {
