@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 from threading import Thread
+from uuid import uuid4
 
 from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QCloseEvent
@@ -25,12 +26,13 @@ from PySide6.QtWidgets import (
 from actionarc.engine.controller import EngineController
 from actionarc.engine.results import ArcRunResult, ArcRunStatus
 from actionarc import APP_VERSION
-from actionarc.models import Arc
+from actionarc.models import ActionDefinition, Arc, ScheduleDefinition, TriggerDefinition
 from actionarc.storage.arc_store import ArcStore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGO_PATH = PROJECT_ROOT / "assets" / "AA.svg"
+ARCS_PATH = PROJECT_ROOT / "actionarc" / "data" / "arcs"
 
 
 class EngineSignalBridge(QObject):
@@ -217,9 +219,13 @@ class MainWindow(QMainWindow):
         self.arc_count.setObjectName("countBadge")
         self.arc_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self.new_arc_button = QPushButton("+  New Arc")
+        self.new_arc_button.setObjectName("newArcButton")
+
         heading_row.addLayout(heading_area)
         heading_row.addStretch()
         heading_row.addWidget(self.arc_count)
+        heading_row.addWidget(self.new_arc_button)
 
         self.arc_list = QListWidget()
         self.arc_list.setObjectName("arcList")
@@ -373,6 +379,7 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self._start_engine)
         self.stop_button.clicked.connect(self._stop_engine)
         self.run_button.clicked.connect(self._run_selected_arc)
+        self.new_arc_button.clicked.connect(self._create_arc)
         self.arc_enabled_toggle.toggled.connect(self._set_selected_arc_enabled)
         self.arc_list.currentItemChanged.connect(self._show_selected_arc)
 
@@ -512,6 +519,39 @@ class MainWindow(QMainWindow):
         self._refresh_selected_arc()
         state = "enabled" if enabled else "disabled"
         self._add_activity(f"{arc.name} was {state}.", "success")
+
+    def _create_arc(self) -> None:
+        """Create a new Arc with default settings."""
+        arc = Arc(
+            format_version=1,
+            id=str(uuid4()),
+            name="New Arc",
+            description="",
+            enabled=False,
+            schedule=ScheduleDefinition(type="manual"),
+            trigger=TriggerDefinition(type="always"),
+            actions=[
+                ActionDefinition(
+                    type="write_file",
+                    config={
+                        "path": "data/new-arc-output.txt",
+                        "content": "Hello from ActionArc!",
+                    },
+                )
+            ],
+        )
+
+        self.arc_store.save(arc, ARCS_PATH / f"{arc.id}.json")
+        self.arcs.append(arc)
+        self._load_arcs()
+
+        for row in range(self.arc_list.count()):
+            item = self.arc_list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == arc.id:
+                self.arc_list.setCurrentItem(item)
+                break
+
+        self._add_activity(f'Created Arc "{arc.name}".')
 
     def _run_selected_arc(self) -> None:
         """Run the selected Arc without blocking the GUI thread."""
