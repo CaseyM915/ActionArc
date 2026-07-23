@@ -1,9 +1,9 @@
 {
   "format_version": 1,
-  "id": "example-arc2",
-  "name": "Example Arc Numero Dos",
+  "id": "example-arc",
+  "name": "Example Arc",
   "description": "Proves the basic ActionArc execution path.",
-  "enabled": false,
+  "enabled": true,
   "schedule": {
     "type": "interval",
     "seconds": 5
@@ -16,7 +16,7 @@
     {
       "type": "write_file",
       "config": {
-        "path": "data/example-output.txt",
+        "path": "example-output.txt",
         "content": "ActionArc completed its first Arc."
       }
     }

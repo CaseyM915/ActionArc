@@ -40,3 +40,13 @@ class ArcStore:
             file.write("\n")
 
         self._paths[arc.id] = path
+
+    def delete(self, arc: Arc) -> None:
+        """Delete an Arc's persisted file."""
+        path = self._paths.get(arc.id)
+
+        if path is None:
+            raise ValueError(f"Arc has no storage path: {arc.id}")
+
+        path.unlink()
+        del self._paths[arc.id]

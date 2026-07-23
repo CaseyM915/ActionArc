@@ -33,7 +33,6 @@ from actionarc.storage.arc_store import ArcStore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGO_PATH = PROJECT_ROOT / "assets" / "AA.svg"
-ARCS_PATH = PROJECT_ROOT / "actionarc" / "data" / "arcs"
 
 
 class EngineSignalBridge(QObject):
@@ -111,14 +110,16 @@ class ArcListCard(QFrame):
 class MainWindow(QMainWindow):
     """Display and control the current ActionArc engine."""
 
-    def __init__(self, controller: EngineController, arcs: list[Arc], arc_store: ArcStore, signals: EngineSignalBridge,):
+    def __init__(self, controller: EngineController, arcs: list[Arc], arc_store: ArcStore, arc_directory: Path, signals: EngineSignalBridge):
         super().__init__()
 
         self.controller = controller
         self.arcs = arcs
         self.arc_store = arc_store
+        self.arc_directory = arc_directory
         self.signals = signals
         self.manual_run_active = False
+        self.delete_confirmation_active = False
 
         self.setWindowTitle("ActionArc")
         self.resize(1180, 760)
@@ -288,7 +289,13 @@ class MainWindow(QMainWindow):
 
         self.duplicate_arc_button = QPushButton("Duplicate")
         self.duplicate_arc_button.setObjectName("secondaryButton")
+        self.duplicate_arc_button.setFixedWidth(96)
         self.duplicate_arc_button.setEnabled(False)
+
+        self.delete_arc_button = QPushButton("Delete")
+        self.delete_arc_button.setObjectName("secondaryButton")
+        self.delete_arc_button.setFixedWidth(96)
+        self.delete_arc_button.setEnabled(False)
 
         title_controls = QVBoxLayout()
         title_controls.setSpacing(8)
@@ -305,6 +312,7 @@ class MainWindow(QMainWindow):
         overview_row.addWidget(overview_heading)
         overview_row.addStretch()
         overview_row.addWidget(self.duplicate_arc_button)
+        overview_row.addWidget(self.delete_arc_button)
 
         summary_card = QFrame()
         summary_card.setObjectName("summaryCard")
@@ -397,7 +405,8 @@ class MainWindow(QMainWindow):
         self.signals.result_received.connect(self._handle_result)
         self.signals.manual_run_finished.connect(self._finish_manual_run)
         self.signals.operation_failed.connect(self._handle_operation_error)
-        self.duplicate_arc_button.clicked.connect(self._duplicate_selected_arc)
+        self.duplicate_arc_button.clicked.connect(self._handle_duplicate_button)
+        self.delete_arc_button.clicked.connect(self._begin_delete_confirmation)
 
     def _load_arcs(self) -> None:
         """Populate the Arc list from the loaded Arcs."""
@@ -428,6 +437,7 @@ class MainWindow(QMainWindow):
         previous: QListWidgetItem | None,
     ) -> None:
         """Display details for the selected Arc."""
+        self._set_delete_confirmation(False)
         self._set_card_selected(previous, False)
         self._set_card_selected(current, True)
 
@@ -437,6 +447,13 @@ class MainWindow(QMainWindow):
             self.arc_enabled_toggle.setEnabled(False)
             self.arc_enabled_toggle.blockSignals(False)
             self.duplicate_arc_button.setEnabled(False)
+            self.delete_arc_button.setEnabled(False)
+            self.arc_name.setText("Select an Arc")
+            self.arc_description.setText("Select a loaded Arc to view its details.")
+            self.arc_trigger.setText("<b>Trigger</b>")
+            self.arc_actions.setText("<b>Action</b>")
+            self.arc_schedule.setText("<b>Schedule</b>")
+            self.arc_status.setText("<b>Status</b>")
             self._update_run_button()
             return
 
@@ -460,6 +477,7 @@ class MainWindow(QMainWindow):
         self.arc_enabled_toggle.setEnabled(True)
         self.arc_enabled_toggle.blockSignals(False)
         self.duplicate_arc_button.setEnabled(True)
+        self.delete_arc_button.setEnabled(True)
 
         self.arc_trigger.setText(
             f"<b>Trigger</b><br>"
@@ -555,7 +573,7 @@ class MainWindow(QMainWindow):
             ],
         )
 
-        self.arc_store.save(arc, ARCS_PATH / f"{arc.id}.json")
+        self.arc_store.save(arc, self.arc_directory / f"{arc.id}.json")
         self.arcs.append(arc)
         self._load_arcs()
 
@@ -566,6 +584,59 @@ class MainWindow(QMainWindow):
                 break
 
         self._add_activity(f'Created Arc "{arc.name}".')
+
+    def _handle_duplicate_button(self) -> None:
+        """Duplicate the selected Arc or confirm its deletion."""
+        if self.delete_confirmation_active:
+            self._delete_selected_arc()
+            return
+
+        self._duplicate_selected_arc()
+
+    def _begin_delete_confirmation(self) -> None:
+        """Enter the inline delete confirmation state."""
+        if self._selected_arc() is None:
+            return
+
+        self._set_delete_confirmation(True)
+
+    def _set_delete_confirmation(self, confirming: bool) -> None:
+        """Update the selected Arc action buttons."""
+        self.delete_confirmation_active = confirming
+
+        self.duplicate_arc_button.setText("Delete" if confirming else "Duplicate")
+        self.duplicate_arc_button.setObjectName("dangerButton" if confirming else "secondaryButton")
+        self.delete_arc_button.setText("← Confirm" if confirming else "Delete")
+        self.delete_arc_button.setObjectName("confirmLabel" if confirming else "secondaryButton")
+        self.delete_arc_button.setEnabled(not confirming and self._selected_arc() is not None)
+
+        for button in (self.duplicate_arc_button, self.delete_arc_button):
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def _delete_selected_arc(self) -> None:
+        """Delete the selected Arc from storage and the loaded Arc list."""
+        arc = self._selected_arc()
+
+        if arc is None:
+            self._set_delete_confirmation(False)
+            return
+
+        try:
+            self.arc_store.delete(arc)
+        except Exception as error:
+            self._set_delete_confirmation(False)
+            self._add_activity(f"Could not delete {arc.name}: {error}", "failure")
+            return
+
+        self.arcs.remove(arc)
+        self._set_delete_confirmation(False)
+        self._load_arcs()
+
+        if not self.arcs:
+            self._show_selected_arc(None, None)
+
+        self._add_activity(f'Deleted Arc "{arc.name}".', "success")
 
     def _duplicate_selected_arc(self) -> None:
         """Duplicate the selected Arc as a disabled independent copy."""
@@ -582,7 +653,7 @@ class MainWindow(QMainWindow):
         arc = Arc.from_dict(arc_data)
 
         try:
-            self.arc_store.save(arc, ARCS_PATH / f"{arc.id}.json")
+            self.arc_store.save(arc, self.arc_directory / f"{arc.id}.json")
         except Exception as error:
             self._add_activity(f"Could not duplicate {source_arc.name}: {error}", "failure")
             return
@@ -1069,6 +1140,28 @@ class MainWindow(QMainWindow):
 
             QPushButton#startButton:hover {
                 background-color: #163823;
+            }
+            
+            QPushButton#dangerButton {
+                color: #ffffff;
+                background-color: #b62324;
+                border-color: #f85149;
+            }
+
+            QPushButton#dangerButton:hover {
+                background-color: #da3633;
+                border-color: #ff7b72;
+            }
+
+            QPushButton#dangerButton:pressed {
+                background-color: #8e1519;
+            }
+
+            QPushButton#confirmLabel,
+            QPushButton#confirmLabel:disabled {
+                color: #f85149;
+                background-color: transparent;
+                border-color: transparent;
             }
 
             QPushButton#primaryButton:disabled,

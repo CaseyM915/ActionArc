@@ -6,6 +6,7 @@ from typing import Any
 from actionarc.components.actions.base import Action
 from actionarc.engine.context import RunContext
 from actionarc.engine.results import ActionResult
+from actionarc.paths import prepare_file_directory
 
 
 class WriteFileAction(Action):
@@ -18,6 +19,10 @@ class WriteFileAction(Action):
 
     def execute(self, context: RunContext) -> ActionResult:
         path = Path(self.config["path"])
+
+        if not path.is_absolute():
+            path = prepare_file_directory() / path
+
         content = self.config.get("content", "")
 
         path.parent.mkdir(parents=True, exist_ok=True)
