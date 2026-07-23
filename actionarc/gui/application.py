@@ -29,11 +29,12 @@ def run_application() -> int:
     registry = ComponentRegistry()
     register_builtin_components(registry)
 
-    arcs = ArcStore().load_all(ARC_DIRECTORY)
+    arc_store = ArcStore()
+    arcs = arc_store.load_all(ARC_DIRECTORY)
     signals = EngineSignalBridge()
     controller = EngineController(ArcRunner(registry), arcs, signals.publish_result)
 
-    window = MainWindow(controller, arcs, signals)
+    window = MainWindow(controller, arcs, arc_store, signals)
     window.show()
 
     return app.exec()

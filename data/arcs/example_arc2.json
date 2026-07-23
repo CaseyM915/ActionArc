@@ -3,7 +3,7 @@
   "id": "example-arc2",
   "name": "Example Arc Numero Dos",
   "description": "Proves the basic ActionArc execution path.",
-  "enabled": true,
+  "enabled": false,
   "schedule": {
     "type": "interval",
     "seconds": 5

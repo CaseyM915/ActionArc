@@ -48,3 +48,37 @@ def test_arc_can_be_saved_and_reloaded(tmp_path) -> None:
     assert isinstance(reloaded, Arc)
     assert reloaded == original
     assert reloaded.to_dict() == original.to_dict()
+
+def test_save_uses_loaded_arc_source_path(tmp_path):
+    source_path = tmp_path / "Jons export 122226.json"
+    source_path.write_text(
+        """
+{
+  "format_version": 1,
+  "id": "imported-arc",
+  "name": "Imported Arc",
+  "description": "",
+  "enabled": true,
+  "schedule": {
+    "type": "manual"
+  },
+  "trigger": {
+    "type": "always",
+    "config": {}
+  },
+  "actions": []
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    store = ArcStore()
+    arc = store.load(source_path)
+    arc.enabled = False
+
+    store.save(arc)
+
+    reloaded = ArcStore().load(source_path)
+
+    assert reloaded.enabled is False
+    assert list(tmp_path.glob("*.json")) == [source_path]

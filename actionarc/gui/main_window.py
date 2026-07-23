@@ -25,6 +25,7 @@ from actionarc.engine.controller import EngineController
 from actionarc.engine.results import ArcRunResult, ArcRunStatus
 from actionarc import APP_VERSION
 from actionarc.models import Arc
+from actionarc.storage.arc_store import ArcStore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -98,16 +99,12 @@ class ArcListCard(QFrame):
 class MainWindow(QMainWindow):
     """Display and control the current ActionArc engine."""
 
-    def __init__(
-        self,
-        controller: EngineController,
-        arcs: list[Arc],
-        signals: EngineSignalBridge,
-    ):
+    def __init__(self, controller: EngineController, arcs: list[Arc], arc_store: ArcStore, signals: EngineSignalBridge,):
         super().__init__()
 
         self.controller = controller
         self.arcs = arcs
+        self.arc_store = arc_store
         self.signals = signals
         self.manual_run_active = False
 
@@ -274,12 +271,17 @@ class MainWindow(QMainWindow):
         self.arc_enabled_badge.setObjectName("arcEnabledBadge")
         self.arc_enabled_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self.toggle_arc_button = QPushButton()
+        self.toggle_arc_button.setObjectName("toggleArcButton")
+        self.toggle_arc_button.setEnabled(False)
+
+        title_controls = QVBoxLayout()
+        title_controls.setSpacing(8)
+        title_controls.addWidget(self.arc_enabled_badge)
+        title_controls.addWidget(self.toggle_arc_button)
+
         title_row.addLayout(title_area, 1)
-        title_row.addWidget(
-            self.arc_enabled_badge,
-            0,
-            Qt.AlignmentFlag.AlignTop,
-        )
+        title_row.addLayout(title_controls)
 
         overview_heading = QLabel("Overview")
         overview_heading.setObjectName("subsectionTitle")
@@ -368,6 +370,7 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self._start_engine)
         self.stop_button.clicked.connect(self._stop_engine)
         self.run_button.clicked.connect(self._run_selected_arc)
+        self.toggle_arc_button.clicked.connect(self._toggle_selected_arc)
         self.arc_list.currentItemChanged.connect(self._show_selected_arc)
 
         self.signals.result_received.connect(self._handle_result)
@@ -456,6 +459,12 @@ class MainWindow(QMainWindow):
         self.arc_enabled_badge.style().unpolish(self.arc_enabled_badge)
         self.arc_enabled_badge.style().polish(self.arc_enabled_badge)
 
+        self.toggle_arc_button.setText("Disable Arc" if arc.enabled else "Enable Arc")
+        self.toggle_arc_button.setProperty("enabled", arc.enabled)
+        self.toggle_arc_button.setEnabled(True)
+        self.toggle_arc_button.style().unpolish(self.toggle_arc_button)
+        self.toggle_arc_button.style().polish(self.toggle_arc_button)
+
         self._update_run_button()
 
     def _start_engine(self) -> None:
@@ -475,6 +484,27 @@ class MainWindow(QMainWindow):
         self.controller.stop()
         self._update_engine_status()
         self._add_activity("Engine stopped.")
+
+    def _toggle_selected_arc(self) -> None:
+        """Enable or disable the selected Arc and persist the change."""
+        arc = self._selected_arc()
+
+        if arc is None:
+            self._add_activity("No Arc is selected.", "warning")
+            return
+
+        arc.enabled = not arc.enabled
+
+        try:
+            self.arc_store.save(arc)
+        except Exception as error:
+            arc.enabled = not arc.enabled
+            self._add_activity(f"Could not update {arc.name}: {error}", "failure")
+            return
+
+        self._refresh_selected_arc()
+        state = "enabled" if arc.enabled else "disabled"
+        self._add_activity(f"{arc.name} was {state}.", "success")
 
     def _run_selected_arc(self) -> None:
         """Run the selected Arc without blocking the GUI thread."""
@@ -583,6 +613,19 @@ class MainWindow(QMainWindow):
         if isinstance(card, ArcListCard):
             card.set_selected(selected)
 
+    def _refresh_selected_arc(self) -> None:
+        """Refresh the selected Arc card and detail panel."""
+        item = self.arc_list.currentItem()
+        arc = self._selected_arc()
+
+        if item is None or arc is None:
+            return
+
+        card = ArcListCard(arc, self._format_schedule(arc))
+        self.arc_list.setItemWidget(item, card)
+        card.set_selected(True)
+        self._show_selected_arc(item, None)
+
     def _selected_arc(self) -> Arc | None:
         """Return the Arc represented by the selected list item."""
         item = self.arc_list.currentItem()
@@ -631,12 +674,9 @@ class MainWindow(QMainWindow):
         self.engine_status.style().polish(self.engine_status)
 
     def _update_run_button(self) -> None:
-        """Enable Run Now only when a runnable Arc is selected."""
-        arc = self._selected_arc()
-
+        """Enable Run Now when an Arc is selected and no manual run is active."""
         self.run_button.setEnabled(
-            arc is not None
-            and arc.enabled
+            self._selected_arc() is not None
             and not self.manual_run_active
         )
 
@@ -925,6 +965,32 @@ class MainWindow(QMainWindow):
                 color: #52606f;
                 background-color: #101821;
                 border-color: #1d2a38;
+            }
+            
+            QPushButton#toggleArcButton {
+                min-width: 92px;
+                padding: 7px 12px;
+            }
+            
+            QPushButton#toggleArcButton[enabled="true"] {
+                color: #f0b72f;
+                background-color: #2d2411;
+                border-color: #66501c;
+            }
+            
+            QPushButton#toggleArcButton[enabled="true"]:hover {
+                background-color: #3a2e14;
+                border-color: #8a6a22;
+            }
+            
+            QPushButton#toggleArcButton[enabled="false"] {
+                color: #56d364;
+                background-color: #10291c;
+                border-color: #1d5133;
+            }
+            
+            QPushButton#toggleArcButton[enabled="false"]:hover {
+                background-color: #163823;
             }
 
             QSplitter::handle {
