@@ -30,6 +30,13 @@ class ScheduleDefinition:
             },
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the schedule definition to persisted Arc data."""
+        return {
+            "type": self.type,
+            **self.config,
+        }
+
 
 @dataclass(slots=True)
 class Arc:
@@ -68,3 +75,16 @@ class Arc:
                 for action_data in data.get("actions", [])
             ],
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the Arc to persisted Arc data."""
+        return {
+            "format_version": self.format_version,
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "enabled": self.enabled,
+            "schedule": self.schedule.to_dict(),
+            "trigger": self.trigger.to_dict(),
+            "actions": [action.to_dict() for action in self.actions],
+        }

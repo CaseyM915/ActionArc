@@ -18,3 +18,10 @@ class ActionDefinition:
             type=data["type"],
             config=data.get("config", {}),
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the action definition to persisted Arc data."""
+        return {
+            "type": self.type,
+            "config": self.config,
+        }

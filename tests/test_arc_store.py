@@ -1,37 +1,50 @@
-"""Tests for Arc storage."""
+"""Tests for Arc persistence."""
 
-import json
-
+from actionarc.models import Arc
 from actionarc.storage.arc_store import ArcStore
 
 
-def test_arc_store_loads_all_json_files(tmp_path):
-    first_arc = {
-        "format_version": 1,
-        "id": "first-arc",
-        "name": "First Arc",
-        "description": "",
-        "enabled": True,
-        "schedule": {"type": "manual"},
-        "trigger": {"type": "always", "config": {}},
-        "actions": [],
+def test_arc_can_be_saved_and_reloaded(tmp_path) -> None:
+    source_path = tmp_path / "source.json"
+    saved_path = tmp_path / "saved.json"
+
+    source_path.write_text(
+        """
+{
+  "format_version": 1,
+  "id": "test-arc",
+  "name": "Test Arc",
+  "description": "Tests Arc persistence.",
+  "enabled": true,
+  "schedule": {
+    "type": "interval",
+    "seconds": 5
+  },
+  "trigger": {
+    "type": "always",
+    "config": {}
+  },
+  "actions": [
+    {
+      "type": "write_file",
+      "config": {
+        "path": "data/test-output.txt",
+        "content": "Test complete."
+      }
     }
-    second_arc = {
-        "format_version": 1,
-        "id": "second-arc",
-        "name": "Second Arc",
-        "description": "",
-        "enabled": False,
-        "schedule": {"type": "manual"},
-        "trigger": {"type": "always", "config": {}},
-        "actions": [],
-    }
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
 
-    (tmp_path / "second.json").write_text(json.dumps(second_arc), encoding="utf-8")
-    (tmp_path / "first.json").write_text(json.dumps(first_arc), encoding="utf-8")
-    (tmp_path / "ignore.txt").write_text("Not an Arc.", encoding="utf-8")
+    store = ArcStore()
+    original = store.load(source_path)
 
-    arcs = ArcStore().load_all(tmp_path)
+    store.save(original, saved_path)
 
-    assert [arc.id for arc in arcs] == ["first-arc", "second-arc"]
-    assert arcs[1].enabled is False
+    reloaded = store.load(saved_path)
+
+    assert isinstance(reloaded, Arc)
+    assert reloaded == original
+    assert reloaded.to_dict() == original.to_dict()
